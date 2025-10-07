@@ -1,5 +1,5 @@
--- Plant vs Brainrot Auto Farm Script
--- AVISO: Usar scripts de exploit pode resultar em ban!
+-- Plant vs Brainrot Script COMPLETO
+-- AVISO: Usar scripts pode resultar em ban!
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8,234 +8,385 @@ local LocalPlayer = Players.LocalPlayer
 
 -- Configurações
 local Config = {
-    AutoFarm = true,
-    AutoPlant = true,
-    DuplicatePlants = true,
-    AttackRange = 50,
+    AutoFarm = false,
+    AutoPlant = false,
+    DuplicatePlants = false,
+    AutoBuySeeds = false,
+    AutoCollect = false,
     FarmDelay = 0.1,
-    PermanentGarden = true
+    PlantDelay = 1,
+    SelectedSeed = "Cactus"
 }
 
--- Funções auxiliares
+-- Função de notificação
 local function notify(text)
     game.StarterGui:SetCore("SendNotification", {
-        Title = "Plant vs Brainrot";
+        Title = "PvB Script";
         Text = text;
         Duration = 3;
     })
 end
 
--- Função para encontrar Brainrots
-local function getBrainrots()
-    local brainrots = {}
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("Model") and (v.Name:lower():find("brainrot") or v.Name:lower():find("zombie")) then
-            if v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-                table.insert(brainrots, v)
+-- Função para encontrar RemoteEvents
+local function findRemote(name)
+    for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+            if v.Name:lower():find(name:lower()) then
+                return v
             end
         end
     end
-    return brainrots
+    return nil
 end
 
--- Função para atacar Brainrots
-local function attackBrainrot(brainrot)
-    if not brainrot or not brainrot:FindFirstChild("Humanoid") then return end
-    
-    pcall(function()
-        -- Tenta encontrar o remote de ataque
-        local attackRemote = ReplicatedStorage:FindFirstChild("Attack") or 
-                           ReplicatedStorage:FindFirstChild("DamageEnemy") or
-                           ReplicatedStorage:FindFirstChild("HitEnemy")
-        
-        if attackRemote and attackRemote:IsA("RemoteEvent") then
-            attackRemote:FireServer(brainrot)
-        elseif attackRemote and attackRemote:IsA("RemoteFunction") then
-            attackRemote:InvokeServer(brainrot)
-        end
-    end)
-end
-
--- Função para duplicar plantas
+-- Função para duplicar plantas (método real)
 local function duplicatePlant(plant)
-    if not plant then return end
-    
     pcall(function()
-        -- Método 1: Clonar direto
-        local clone = plant:Clone()
-        clone.Parent = plant.Parent
-        clone.Position = plant.Position + Vector3.new(5, 0, 0)
+        if not plant then return end
         
-        -- Método 2: Através de RemoteEvent de plantio
-        local plantRemote = ReplicatedStorage:FindFirstChild("PlantSeed") or
-                          ReplicatedStorage:FindFirstChild("Plant") or
-                          ReplicatedStorage:FindFirstChild("PlacePlant")
-        
+        -- Método 1: Fire RemoteEvent de plantio múltiplo
+        local plantRemote = findRemote("Plant") or findRemote("Seed") or findRemote("Place")
         if plantRemote then
-            if plantRemote:IsA("RemoteEvent") then
-                plantRemote:FireServer(plant.Name, plant.Position + Vector3.new(5, 0, 0))
-            elseif plantRemote:IsA("RemoteFunction") then
-                plantRemote:InvokeServer(plant.Name, plant.Position + Vector3.new(5, 0, 0))
+            for i = 1, 5 do
+                if plantRemote:IsA("RemoteEvent") then
+                    plantRemote:FireServer(plant.Name, plant.Position + Vector3.new(math.random(-5,5), 0, math.random(-5,5)))
+                else
+                    plantRemote:InvokeServer(plant.Name, plant.Position + Vector3.new(math.random(-5,5), 0, math.random(-5,5)))
+                end
+                wait(0.05)
             end
         end
-    end)
-end
-
--- Função para mover plantas para jardim permanente
-local function moveToPermanentGarden(plant)
-    pcall(function()
-        local gardenRemote = ReplicatedStorage:FindFirstChild("SaveToGarden") or
-                           ReplicatedStorage:FindFirstChild("PermanentGarden") or
-                           ReplicatedStorage:FindFirstChild("MoveToGarden")
         
-        if gardenRemote then
-            if gardenRemote:IsA("RemoteEvent") then
-                gardenRemote:FireServer(plant)
-            elseif gardenRemote:IsA("RemoteFunction") then
-                gardenRemote:InvokeServer(plant)
-            end
+        -- Método 2: Clone direto (se o jogo permitir)
+        for i = 1, 3 do
+            local clone = plant:Clone()
+            clone.Parent = plant.Parent
+            clone:MoveTo(plant.Position + Vector3.new(math.random(-10,10), 0, math.random(-10,10)))
+            wait(0.1)
         end
     end)
 end
 
--- Loop principal de auto farm
+-- Auto Farm de Brainrots
 local function autoFarmLoop()
-    while Config.AutoFarm do
-        wait(Config.FarmDelay)
-        
-        local brainrots = getBrainrots()
-        for _, brainrot in pairs(brainrots) do
+    spawn(function()
+        while wait(Config.FarmDelay) do
             if not Config.AutoFarm then break end
             
-            local character = LocalPlayer.Character
-            if character and character:FindFirstChild("HumanoidRootPart") then
-                local distance = (character.HumanoidRootPart.Position - brainrot.PrimaryPart.Position).Magnitude
-                
-                if distance <= Config.AttackRange then
-                    attackBrainrot(brainrot)
-                end
-            end
-        end
-    end
-end
-
--- Loop de duplicação de plantas
-local function autoDuplicateLoop()
-    while Config.DuplicatePlants do
-        wait(1)
-        
-        pcall(function()
-            local myPlants = Workspace:FindFirstChild("Plants") or Workspace:FindFirstChild("MyPlants")
-            if myPlants then
-                for _, plant in pairs(myPlants:GetChildren()) do
-                    if plant:IsA("Model") then
-                        duplicatePlant(plant)
-                        
-                        if Config.PermanentGarden then
-                            moveToPermanentGarden(plant)
+            pcall(function()
+                -- Procura por Brainrots
+                for _, mob in pairs(Workspace:GetDescendants()) do
+                    if mob:IsA("Model") and mob:FindFirstChild("Humanoid") then
+                        if mob.Name:lower():find("brain") or mob.Name:lower():find("zombie") or mob.Name:lower():find("boneca") then
+                            if mob.Humanoid.Health > 0 then
+                                -- Tenta atacar
+                                local attackRemote = findRemote("Attack") or findRemote("Damage") or findRemote("Hit")
+                                if attackRemote then
+                                    if attackRemote:IsA("RemoteEvent") then
+                                        attackRemote:FireServer(mob)
+                                    else
+                                        attackRemote:InvokeServer(mob)
+                                    end
+                                end
+                            end
                         end
-                        
-                        wait(0.5)
                     end
                 end
-            end
-        end)
-    end
+            end)
+        end
+    end)
 end
 
--- UI simples
+-- Auto Buy Seeds
+local function autoBuySeeds()
+    spawn(function()
+        while wait(2) do
+            if not Config.AutoBuySeeds then break end
+            
+            pcall(function()
+                local shopRemote = findRemote("Buy") or findRemote("Purchase") or findRemote("Shop")
+                if shopRemote then
+                    if shopRemote:IsA("RemoteEvent") then
+                        shopRemote:FireServer(Config.SelectedSeed)
+                        shopRemote:FireServer("Cactus")
+                        shopRemote:FireServer("Morcego")
+                    else
+                        shopRemote:InvokeServer(Config.SelectedSeed)
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+-- Auto Plant
+local function autoPlantLoop()
+    spawn(function()
+        while wait(Config.PlantDelay) do
+            if not Config.AutoPlant then break end
+            
+            pcall(function()
+                local char = LocalPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    local pos = char.HumanoidRootPart.Position
+                    
+                    -- Tenta plantar próximo ao jogador
+                    local plantRemote = findRemote("Plant") or findRemote("Seed") or findRemote("Place")
+                    if plantRemote then
+                        for i = 1, 3 do
+                            local randomPos = pos + Vector3.new(math.random(-10,10), 0, math.random(-10,10))
+                            if plantRemote:IsA("RemoteEvent") then
+                                plantRemote:FireServer(Config.SelectedSeed, randomPos)
+                            else
+                                plantRemote:InvokeServer(Config.SelectedSeed, randomPos)
+                            end
+                            wait(0.2)
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+-- Duplicação automática de plantas
+local function autoDuplicateLoop()
+    spawn(function()
+        while wait(3) do
+            if not Config.DuplicatePlants then break end
+            
+            pcall(function()
+                -- Procura plantas no workspace
+                local plantsFolder = Workspace:FindFirstChild("Plants") or Workspace:FindFirstChild("MyPlants")
+                if plantsFolder then
+                    for _, plant in pairs(plantsFolder:GetChildren()) do
+                        if plant:IsA("Model") then
+                            duplicatePlant(plant)
+                            wait(0.5)
+                        end
+                    end
+                end
+                
+                -- Duplica plantas próximas ao jogador
+                local char = LocalPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    for _, obj in pairs(Workspace:GetDescendants()) do
+                        if obj:IsA("Model") and obj.Name:lower():find("plant") or obj.Name:lower():find("cactus") then
+                            local distance = (char.HumanoidRootPart.Position - obj.PrimaryPart.Position).Magnitude
+                            if distance < 50 then
+                                duplicatePlant(obj)
+                                wait(0.3)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+-- Auto Collect (coletar drops/moedas)
+local function autoCollectLoop()
+    spawn(function()
+        while wait(0.5) do
+            if not Config.AutoCollect then break end
+            
+            pcall(function()
+                local char = LocalPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    -- Procura por drops/moedas
+                    for _, item in pairs(Workspace:GetDescendants()) do
+                        if item:IsA("Part") or item:IsA("MeshPart") then
+                            if item.Name:lower():find("coin") or item.Name:lower():find("drop") or item.Name:lower():find("money") then
+                                item.CFrame = char.HumanoidRootPart.CFrame
+                                wait(0.05)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+-- Interface Gráfica Melhorada
 local ScreenGui = Instance.new("ScreenGui")
-local Frame = Instance.new("Frame")
+local MainFrame = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
-local AutoFarmBtn = Instance.new("TextButton")
-local DuplicateBtn = Instance.new("TextButton")
-local CloseBtn = Instance.new("TextButton")
+local ScrollFrame = Instance.new("ScrollingFrame")
 
 ScreenGui.Parent = game.CoreGui
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.ResetOnSpawn = false
 
-Frame.Parent = ScreenGui
-Frame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-Frame.BorderSizePixel = 0
-Frame.Position = UDim2.new(0.4, 0, 0.3, 0)
-Frame.Size = UDim2.new(0, 300, 0, 200)
-Frame.Active = true
-Frame.Draggable = true
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.new(0.35, 0, 0.25, 0)
+MainFrame.Size = UDim2.new(0, 350, 0, 450)
+MainFrame.Active = true
+MainFrame.Draggable = true
 
-Title.Parent = Frame
-Title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+-- Borda brilhante
+local Border = Instance.new("UIStroke")
+Border.Parent = MainFrame
+Border.Color = Color3.fromRGB(100, 200, 255)
+Border.Thickness = 2
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 10)
+Corner.Parent = MainFrame
+
+Title.Parent = MainFrame
+Title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 Title.BorderSizePixel = 0
-Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Size = UDim2.new(1, 0, 0, 50)
 Title.Font = Enum.Font.GothamBold
-Title.Text = "Plant vs Brainrot Script"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 16
+Title.Text = "🌿 Plant vs Brainrot Script"
+Title.TextColor3 = Color3.fromRGB(100, 200, 255)
+Title.TextSize = 18
 
-AutoFarmBtn.Parent = Frame
-AutoFarmBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-AutoFarmBtn.BorderSizePixel = 0
-AutoFarmBtn.Position = UDim2.new(0.1, 0, 0.3, 0)
-AutoFarmBtn.Size = UDim2.new(0.8, 0, 0, 35)
-AutoFarmBtn.Font = Enum.Font.Gotham
-AutoFarmBtn.Text = "Auto Farm: ON"
-AutoFarmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-AutoFarmBtn.TextSize = 14
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.Parent = Title
 
-DuplicateBtn.Parent = Frame
-DuplicateBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-DuplicateBtn.BorderSizePixel = 0
-DuplicateBtn.Position = UDim2.new(0.1, 0, 0.55, 0)
-DuplicateBtn.Size = UDim2.new(0.8, 0, 0, 35)
-DuplicateBtn.Font = Enum.Font.Gotham
-DuplicateBtn.Text = "Duplicate Plants: ON"
-DuplicateBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-DuplicateBtn.TextSize = 14
+ScrollFrame.Parent = MainFrame
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.Position = UDim2.new(0, 10, 0, 60)
+ScrollFrame.Size = UDim2.new(1, -20, 1, -70)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 600)
+ScrollFrame.ScrollBarThickness = 5
 
-CloseBtn.Parent = Frame
-CloseBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-CloseBtn.BorderSizePixel = 0
-CloseBtn.Position = UDim2.new(0.1, 0, 0.8, 0)
-CloseBtn.Size = UDim2.new(0.8, 0, 0, 30)
-CloseBtn.Font = Enum.Font.Gotham
-CloseBtn.Text = "Fechar"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseBtn.TextSize = 14
+-- Função para criar botões
+local function createButton(text, position, callback, isActive)
+    local Button = Instance.new("TextButton")
+    Button.Parent = ScrollFrame
+    Button.BackgroundColor3 = isActive and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+    Button.BorderSizePixel = 0
+    Button.Position = UDim2.new(0, 0, 0, position)
+    Button.Size = UDim2.new(1, 0, 0, 45)
+    Button.Font = Enum.Font.GothamBold
+    Button.Text = text
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.TextSize = 14
+    
+    local BtnCorner = Instance.new("UICorner")
+    BtnCorner.CornerRadius = UDim.new(0, 8)
+    BtnCorner.Parent = Button
+    
+    Button.MouseButton1Click:Connect(callback)
+    
+    return Button
+end
 
--- Eventos dos botões
-AutoFarmBtn.MouseButton1Click:Connect(function()
+-- Criar botões
+local yPos = 0
+
+local AutoFarmBtn = createButton("🎯 Auto Farm: OFF", yPos, function()
     Config.AutoFarm = not Config.AutoFarm
-    AutoFarmBtn.Text = "Auto Farm: " .. (Config.AutoFarm and "ON" or "OFF")
+    AutoFarmBtn.Text = "🎯 Auto Farm: " .. (Config.AutoFarm and "ON" or "OFF")
     AutoFarmBtn.BackgroundColor3 = Config.AutoFarm and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-    
     if Config.AutoFarm then
-        spawn(autoFarmLoop)
-        notify("Auto Farm ativado!")
+        autoFarmLoop()
+        notify("Auto Farm Ativado!")
     else
-        notify("Auto Farm desativado!")
+        notify("Auto Farm Desativado!")
     end
-end)
+end, false)
+yPos = yPos + 55
 
-DuplicateBtn.MouseButton1Click:Connect(function()
+local DuplicateBtn = createButton("📦 Duplicate Plants: OFF", yPos, function()
     Config.DuplicatePlants = not Config.DuplicatePlants
-    DuplicateBtn.Text = "Duplicate Plants: " .. (Config.DuplicatePlants and "ON" or "OFF")
+    DuplicateBtn.Text = "📦 Duplicate Plants: " .. (Config.DuplicatePlants and "ON" or "OFF")
     DuplicateBtn.BackgroundColor3 = Config.DuplicatePlants and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
-    
     if Config.DuplicatePlants then
-        spawn(autoDuplicateLoop)
-        notify("Duplicação de plantas ativada!")
+        autoDuplicateLoop()
+        notify("Duplicação Ativada!")
     else
-        notify("Duplicação de plantas desativada!")
+        notify("Duplicação Desativada!")
     end
-end)
+end, false)
+yPos = yPos + 55
 
-CloseBtn.MouseButton1Click:Connect(function()
+local AutoBuyBtn = createButton("💰 Auto Buy Seeds: OFF", yPos, function()
+    Config.AutoBuySeeds = not Config.AutoBuySeeds
+    AutoBuyBtn.Text = "💰 Auto Buy Seeds: " .. (Config.AutoBuySeeds and "ON" or "OFF")
+    AutoBuyBtn.BackgroundColor3 = Config.AutoBuySeeds and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+    if Config.AutoBuySeeds then
+        autoBuySeeds()
+        notify("Auto Buy Ativado!")
+    else
+        notify("Auto Buy Desativado!")
+    end
+end, false)
+yPos = yPos + 55
+
+local AutoPlantBtn = createButton("🌱 Auto Plant: OFF", yPos, function()
+    Config.AutoPlant = not Config.AutoPlant
+    AutoPlantBtn.Text = "🌱 Auto Plant: " .. (Config.AutoPlant and "ON" or "OFF")
+    AutoPlantBtn.BackgroundColor3 = Config.AutoPlant and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+    if Config.AutoPlant then
+        autoPlantLoop()
+        notify("Auto Plant Ativado!")
+    else
+        notify("Auto Plant Desativado!")
+    end
+end, false)
+yPos = yPos + 55
+
+local AutoCollectBtn = createButton("✨ Auto Collect: OFF", yPos, function()
+    Config.AutoCollect = not Config.AutoCollect
+    AutoCollectBtn.Text = "✨ Auto Collect: " .. (Config.AutoCollect and "ON" or "OFF")
+    AutoCollectBtn.BackgroundColor3 = Config.AutoCollect and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+    if Config.AutoCollect then
+        autoCollectLoop()
+        notify("Auto Collect Ativado!")
+    else
+        notify("Auto Collect Desativado!")
+    end
+end, false)
+yPos = yPos + 55
+
+-- Botão de seleção de sementes
+local SeedLabel = Instance.new("TextLabel")
+SeedLabel.Parent = ScrollFrame
+SeedLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+SeedLabel.Position = UDim2.new(0, 0, 0, yPos)
+SeedLabel.Size = UDim2.new(1, 0, 0, 35)
+SeedLabel.Font = Enum.Font.Gotham
+SeedLabel.Text = "Semente Selecionada: " .. Config.SelectedSeed
+SeedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+SeedLabel.TextSize = 12
+local SeedCorner = Instance.new("UICorner")
+SeedCorner.CornerRadius = UDim.new(0, 8)
+SeedCorner.Parent = SeedLabel
+yPos = yPos + 45
+
+local seeds = {"Cactus", "Morcego", "Girassol", "Peashooter", "Chomper"}
+for i, seed in pairs(seeds) do
+    local SeedBtn = createButton("🌿 " .. seed, yPos, function()
+        Config.SelectedSeed = seed
+        SeedLabel.Text = "Semente Selecionada: " .. seed
+        notify("Semente alterada para: " .. seed)
+    end, false)
+    SeedBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
+    yPos = yPos + 50
+end
+
+-- Botão Fechar
+local CloseBtn = createButton("❌ Fechar Script", yPos, function()
     ScreenGui:Destroy()
     Config.AutoFarm = false
     Config.DuplicatePlants = false
-    notify("Script fechado!")
-end)
+    Config.AutoBuySeeds = false
+    Config.AutoPlant = false
+    Config.AutoCollect = false
+    notify("Script Fechado!")
+end, false)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 
--- Iniciar
-notify("Script carregado com sucesso!")
-spawn(autoFarmLoop)
-spawn(autoDuplicateLoop)
+-- Inicializar
+notify("✅ Script Carregado com Sucesso!")
+notify("🎮 Criado para Plant vs Brainrot")
+wait(1)
+notify("⚠️ Use por sua conta e risco!")
